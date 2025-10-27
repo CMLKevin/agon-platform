@@ -15,6 +15,7 @@ import Games from './pages/Games';
 import CoinFlip from './pages/CoinFlip';
 import Blackjack from './pages/Blackjack';
 import Plinko from './pages/Plinko';
+import Crash from './pages/Crash';
 import Trading from './pages/Trading';
 
 function App() {
@@ -122,6 +123,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <Plinko />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/games/crash"
+            element={
+              <ProtectedRoute>
+                <Crash />
               </ProtectedRoute>
             }
           />

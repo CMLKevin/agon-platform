@@ -98,6 +98,23 @@ const Games = () => {
         winRate: 'Varies',
         payout: 'Up to 1000x'
       }
+    },
+    {
+      id: 'crash',
+      title: 'Crash',
+      description: 'Watch the multiplier rise and cash out before it crashes!',
+      icon: (
+        <svg className="w-12 h-12 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+        </svg>
+      ),
+      gradient: 'from-cyan-500 to-blue-600',
+      path: '/games/crash',
+      stats: {
+        houseEdge: '10%',
+        winRate: 'Varies',
+        payout: 'Up to 5x'
+      }
     }
   ];
 
@@ -231,6 +248,7 @@ const Games = () => {
                 const gameType = game.game_type === 'coinflip' ? 'Coin Flip' 
                   : game.game_type === 'blackjack' ? 'Blackjack' 
                   : game.game_type === 'plinko' ? 'Plinko' 
+                  : game.game_type === 'crash' ? 'Crash'
                   : game.game_type;
                 
                 let payout;
@@ -239,6 +257,19 @@ const Games = () => {
                 } else if (game.game_type === 'plinko') {
                   const multiplier = parseFloat(game.result);
                   payout = Math.abs(game.bet_amount * (multiplier - 1));
+                } else if (game.game_type === 'crash') {
+                  let gameData = {};
+                  try {
+                    if (game.choice && typeof game.choice === 'string') {
+                      gameData = JSON.parse(game.choice);
+                    } else if (game.choice && typeof game.choice === 'object') {
+                      gameData = game.choice;
+                    }
+                  } catch (error) {
+                    console.error('Failed to parse crash game data:', error);
+                  }
+                  const cashOutAt = gameData.cashOutAt || 0;
+                  payout = game.won ? Math.abs(game.bet_amount * (cashOutAt - 1)) : game.bet_amount;
                 } else {
                   payout = game.bet_amount;
                 }
@@ -256,7 +287,7 @@ const Games = () => {
                       </div>
                       <div>
                         <p className="text-sm font-semibold text-phantom-text-primary">
-                          {gameType} • {game.game_type === 'plinko' ? `${game.result}x` : game.result}
+                          {gameType} • {(game.game_type === 'plinko' || game.game_type === 'crash') ? `${game.result}x` : game.result}
                         </p>
                         <p className="text-xs text-phantom-text-tertiary">
                           {new Date(game.created_at).toLocaleString()}

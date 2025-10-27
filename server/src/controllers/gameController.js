@@ -493,3 +493,97 @@ export const playPlinko = async (req, res) => {
   }
 };
 
+// Crash game with 20% instant crash, 5x ceiling, 10% house edge
+export const playCrash = async (req, res) => {
+  const { betAmount, cashOutAt } = req.body;
+  const userId = req.user.id;
+
+  if (!betAmount || betAmount <= 0) {
+    return res.status(400).json({ message: 'Invalid bet amount' });
+  }
+
+  if (!cashOutAt || cashOutAt < 1.01 || cashOutAt > 5.0) {
+    return res.status(400).json({ message: 'Invalid cashout multiplier. Must be between 1.01 and 5.0' });
+  }
+
+  try {
+    const wallet = await db.queryOne('SELECT stoneworks_dollar FROM wallets WHERE user_id = $1', [userId]);
+    
+    if (!wallet || parseFloat(wallet.stoneworks_dollar) < betAmount) {
+      return res.status(400).json({ message: 'Insufficient Game Chips balance' });
+    }
+
+    // Generate crash point with 20% instant crash, 10% house edge, 5x ceiling
+    let crashPoint;
+    
+    if (Math.random() < 0.2) {
+      // 20% chance of instant crash at 1.0x
+      crashPoint = 1.0;
+    } else {
+      // 80% chance of exponential distribution
+      // House edge factor tuned to achieve ~10% overall house edge
+      const houseEdgeFactor = 1.11;
+      const random = Math.random();
+      
+      // Exponential distribution: crash = 99 / (random * 99)
+      // Divided by house edge factor, capped at 5.0x
+      crashPoint = Math.min(5.0, (99 / (random * 99)) / houseEdgeFactor);
+      
+      // Ensure minimum of 1.01 for non-instant crashes
+      crashPoint = Math.max(1.01, crashPoint);
+    }
+    
+    // Round to 2 decimal places for display
+    crashPoint = Math.round(crashPoint * 100) / 100;
+    
+    // Determine if player wins
+    const playerWins = cashOutAt <= crashPoint;
+    
+    let amountChange, newBalance, payout;
+    
+    if (playerWins) {
+      // Player cashed out before crash
+      payout = betAmount * cashOutAt;
+      amountChange = payout - betAmount;
+      newBalance = parseFloat(wallet.stoneworks_dollar) + amountChange;
+    } else {
+      // Player lost - crashed before cashout
+      amountChange = -betAmount;
+      payout = 0;
+      newBalance = parseFloat(wallet.stoneworks_dollar) - betAmount;
+    }
+    
+    await db.exec('UPDATE wallets SET stoneworks_dollar = $1 WHERE user_id = $2', [newBalance, userId]);
+
+    // Save game history
+    const gameData = { crashPoint, cashOutAt };
+    await db.exec(
+      `INSERT INTO game_history (user_id, game_type, bet_amount, result, choice, won, created_at)
+       VALUES ($1, $2, $3, $4, $5::jsonb, $6, NOW())`,
+      [userId, 'crash', betAmount, crashPoint.toString(), JSON.stringify(gameData), playerWins]
+    );
+
+    // Record transaction
+    await db.exec(
+      `INSERT INTO transactions (from_user_id, to_user_id, transaction_type, currency, amount, description)
+       VALUES ($1, NULL, 'game', $2, $3, $4)`,
+      [userId, 'stoneworks_dollar', Math.abs(amountChange), `Crash: ${crashPoint}x ${playerWins ? 'Won' : 'Lost'}`]
+    );
+
+    res.json({
+      won: playerWins,
+      crashPoint,
+      cashOutAt,
+      betAmount,
+      payout,
+      amountChange,
+      newBalance,
+      message: playerWins ? `Cashed out at ${cashOutAt}x!` : `Crashed at ${crashPoint}x!`
+    });
+
+  } catch (error) {
+    console.error('Error playing crash:', error);
+    res.status(500).json({ message: 'Failed to play game' });
+  }
+};
+

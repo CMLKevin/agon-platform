@@ -1,5 +1,5 @@
 import express from 'express';
-import { playCoinFlip, playBlackjack, playPlinko, getGameHistory, getGameStats } from '../controllers/gameController.js';
+import { playCoinFlip, playBlackjack, playPlinko, playCrash, getGameHistory, getGameStats } from '../controllers/gameController.js';
 import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -15,6 +15,9 @@ router.post('/blackjack', playBlackjack);
 
 // Play plinko
 router.post('/plinko', playPlinko);
+
+// Play crash
+router.post('/crash', playCrash);
 
 // Get game history
 router.get('/history', getGameHistory);
