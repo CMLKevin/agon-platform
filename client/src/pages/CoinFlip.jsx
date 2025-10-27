@@ -1,8 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import Navbar from '../components/Navbar';
 import { walletAPI } from '../services/api';
 import { formatCurrency, getCurrencySymbol } from '../utils/formatters';
 import api from '../services/api';
+import { useSound } from '../hooks/useSound';
+import { SOUNDS } from '../utils/sounds';
 
 const CoinFlip = () => {
   const [wallet, setWallet] = useState(null);
@@ -12,70 +14,7 @@ const CoinFlip = () => {
   const [gameResult, setGameResult] = useState(null);
   const [showResult, setShowResult] = useState(false);
   const [recentGames, setRecentGames] = useState([]);
-  const audioCtxRef = useRef(null);
-
-  const ensureAudioContext = () => {
-    if (!audioCtxRef.current) {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      audioCtxRef.current = new AudioCtx();
-    }
-    return audioCtxRef.current;
-  };
-
-  const playFlipSound = () => {
-    const ctx = ensureAudioContext();
-    const duration = 0.25;
-    const now = ctx.currentTime;
-
-    // Click attack
-    const clickOsc = ctx.createOscillator();
-    const clickGain = ctx.createGain();
-    clickOsc.type = 'square';
-    clickOsc.frequency.setValueAtTime(400, now);
-    clickGain.gain.setValueAtTime(0.2, now);
-    clickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
-    clickOsc.connect(clickGain).connect(ctx.destination);
-    clickOsc.start(now);
-    clickOsc.stop(now + 0.06);
-
-    // Short filtered noise swish
-    const bufferSize = 0.2 * ctx.sampleRate;
-    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
-    }
-    const noise = ctx.createBufferSource();
-    noise.buffer = buffer;
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'bandpass';
-    filter.frequency.setValueAtTime(1500, now);
-    const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0.15, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-    noise.connect(filter).connect(gain).connect(ctx.destination);
-    noise.start(now);
-    noise.stop(now + duration);
-  };
-
-  const playWinChime = () => {
-    const ctx = ensureAudioContext();
-    const now = ctx.currentTime;
-    const notes = [523.25, 659.25, 783.99]; // C5, E5, G5
-
-    notes.forEach((freq, i) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, now + i * 0.08);
-      gain.gain.setValueAtTime(0.0001, now + i * 0.08);
-      gain.gain.exponentialRampToValueAtTime(0.2, now + i * 0.08 + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.25);
-      osc.connect(gain).connect(ctx.destination);
-      osc.start(now + i * 0.08);
-      osc.stop(now + i * 0.08 + 0.3);
-    });
-  };
+  const { playSound, isMuted, toggleMute } = useSound();
 
   useEffect(() => {
     loadWallet();
@@ -119,9 +58,11 @@ const CoinFlip = () => {
     }
 
     setIsFlipping(true);
-    try { playFlipSound(); } catch {}
     setShowResult(false);
     setGameResult(null);
+    
+    // Play initial flip sound
+    playSound(SOUNDS.COIN_FLIP);
 
     try {
       const res = await api.post('/games/coinflip', {
@@ -129,17 +70,31 @@ const CoinFlip = () => {
         choice: selectedSide
       });
 
-      // Simulate coin flip animation
+      // Play spinning sounds during animation
+      setTimeout(() => playSound(SOUNDS.COIN_SPIN), 400);
+      setTimeout(() => playSound(SOUNDS.COIN_SPIN), 800);
+      setTimeout(() => playSound(SOUNDS.COIN_SPIN), 1200);
+
+      // Play landing sound and show result
       setTimeout(() => {
-        setGameResult(res.data);
-        setShowResult(true);
-        setIsFlipping(false);
-        if (res.data?.won) {
-          try { playWinChime(); } catch {}
-        }
-        loadWallet();
-        loadRecentGames();
-      }, 1800);
+        playSound(SOUNDS.COIN_LAND);
+        
+        setTimeout(() => {
+          setGameResult(res.data);
+          setShowResult(true);
+          setIsFlipping(false);
+          
+          // Play result sound
+          if (res.data?.won) {
+            playSound(SOUNDS.GAME_WIN);
+          } else {
+            playSound(SOUNDS.GAME_LOSS);
+          }
+          
+          loadWallet();
+          loadRecentGames();
+        }, 200);
+      }, 1600);
     } catch (error) {
       setIsFlipping(false);
       alert(error.response?.data?.message || 'Failed to play game');
@@ -165,15 +120,33 @@ const CoinFlip = () => {
                 {getCurrencySymbol('stoneworks_dollar')} {formatCurrency(wallet?.stoneworks_dollar || 0)}
               </h2>
             </div>
-            <div className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center">
-              <svg className="w-8 h-8 text-white/90" fill="currentColor" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" fill="none"/>
-                <circle cx="12" cy="12" r="2" fill="currentColor"/>
-                <circle cx="12" cy="7" r="1" fill="currentColor"/>
-                <circle cx="12" cy="17" r="1" fill="currentColor"/>
-                <circle cx="7" cy="12" r="1" fill="currentColor"/>
-                <circle cx="17" cy="12" r="1" fill="currentColor"/>
-              </svg>
+            <div className="flex items-center gap-3">
+              <div className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center">
+                <svg className="w-8 h-8 text-white/90" fill="currentColor" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" fill="none"/>
+                  <circle cx="12" cy="12" r="2" fill="currentColor"/>
+                  <circle cx="12" cy="7" r="1" fill="currentColor"/>
+                  <circle cx="12" cy="17" r="1" fill="currentColor"/>
+                  <circle cx="7" cy="12" r="1" fill="currentColor"/>
+                  <circle cx="17" cy="12" r="1" fill="currentColor"/>
+                </svg>
+              </div>
+              <button
+                onClick={toggleMute}
+                className="p-3 rounded-xl bg-white/20 hover:bg-white/30 backdrop-blur-sm transition-all"
+                title={isMuted ? 'Unmute sounds' : 'Mute sounds'}
+              >
+                {isMuted ? (
+                  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" clipRule="evenodd" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                  </svg>
+                ) : (
+                  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                  </svg>
+                )}
+              </button>
             </div>
           </div>
         </div>
