@@ -361,6 +361,101 @@ router.get('/metrics', async (req, res) => {
       ORDER BY games DESC
     `);
 
+    // Crash totals
+    const crashTotalsRow = await db.queryOne(`
+      SELECT 
+        COUNT(1) AS total_games,
+        SUM(CASE WHEN won = TRUE THEN 1 ELSE 0 END) AS wins,
+        SUM(CASE WHEN won = FALSE THEN 1 ELSE 0 END) AS losses,
+        COUNT(DISTINCT user_id) AS unique_players,
+        SUM(bet_amount) AS total_bet,
+        AVG(CAST(result AS NUMERIC)) AS avg_crash_point,
+        MAX(CAST(result AS NUMERIC)) AS max_crash_point,
+        MIN(CAST(result AS NUMERIC)) AS min_crash_point
+      FROM game_history
+      WHERE game_type = 'crash'
+    `);
+
+    const crashTotals = crashTotalsRow ? {
+      total_games: Number(crashTotalsRow.total_games || 0),
+      wins: Number(crashTotalsRow.wins || 0),
+      losses: Number(crashTotalsRow.losses || 0),
+      unique_players: Number(crashTotalsRow.unique_players || 0),
+      total_bet: Number(crashTotalsRow.total_bet || 0),
+      avg_crash_point: Number(Number(crashTotalsRow.avg_crash_point || 0).toFixed(2)),
+      max_crash_point: Number(Number(crashTotalsRow.max_crash_point || 0).toFixed(2)),
+      min_crash_point: Number(Number(crashTotalsRow.min_crash_point || 0).toFixed(2)),
+      win_rate: crashTotalsRow.total_games ? Number(((crashTotalsRow.wins || 0) / crashTotalsRow.total_games * 100).toFixed(2)) : 0,
+    } : {
+      total_games: 0, wins: 0, losses: 0, unique_players: 0, total_bet: 0, avg_crash_point: 0, max_crash_point: 0, min_crash_point: 0, win_rate: 0
+    };
+
+    // Calculate Crash house profit and payout separately
+    const crashGames = await db.query(`
+      SELECT bet_amount, won, choice, CAST(result AS NUMERIC) AS crash_point
+      FROM game_history
+      WHERE game_type = 'crash'
+    `);
+
+    let crashHouseProfit = 0;
+    let crashTotalPayout = 0;
+    crashGames.forEach(game => {
+      const betAmount = parseFloat(game.bet_amount);
+      if (game.won) {
+        // Player won - parse cashOutAt from choice
+        let cashOutAt = 1.0;
+        try {
+          const choice = typeof game.choice === 'string' ? JSON.parse(game.choice) : game.choice;
+          cashOutAt = parseFloat(choice.cashOutAt || 1.0);
+        } catch (e) {
+          console.error('Failed to parse crash game choice:', e);
+        }
+        const payout = betAmount * cashOutAt;
+        crashTotalPayout += payout;
+        crashHouseProfit += betAmount - payout;
+      } else {
+        // Player lost - house keeps entire bet
+        crashHouseProfit += betAmount;
+      }
+    });
+
+    crashTotals.house_profit = Number(crashHouseProfit.toFixed(2));
+    crashTotals.total_payout = Number(crashTotalPayout.toFixed(2));
+    crashTotals.actual_rtp = crashTotals.total_bet > 0 
+      ? Number((crashTotalPayout / crashTotals.total_bet * 100).toFixed(2))
+      : 0;
+
+    // Crash games by day (last 14 days)
+    const crashByDay = await db.query(`
+      SELECT created_at::date AS day,
+        COUNT(1) AS games,
+        SUM(CASE WHEN won = TRUE THEN 1 ELSE 0 END) AS wins,
+        SUM(CASE WHEN won = FALSE THEN 1 ELSE 0 END) AS losses,
+        SUM(bet_amount) AS total_bet,
+        AVG(CAST(result AS NUMERIC)) AS avg_crash_point
+      FROM game_history
+      WHERE game_type = 'crash'
+      GROUP BY created_at::date
+      ORDER BY day DESC
+      LIMIT 14
+    `);
+
+    // Top crash players
+    const topCrashPlayers = await db.query(`
+      SELECT u.id, u.username,
+        COUNT(gh.id) AS games_played,
+        SUM(CASE WHEN gh.won = TRUE THEN 1 ELSE 0 END) AS wins,
+        SUM(gh.bet_amount) AS total_bet,
+        AVG(CAST(gh.result AS NUMERIC)) AS avg_crash_point,
+        MAX(CAST(gh.result AS NUMERIC)) AS max_crash_point
+      FROM game_history gh
+      JOIN users u ON u.id = gh.user_id
+      WHERE gh.game_type = 'crash'
+      GROUP BY u.id
+      ORDER BY games_played DESC
+      LIMIT 10
+    `);
+
     const activity24h = await db.query(`
       SELECT action, COUNT(1) as count
       FROM activity_logs
@@ -617,6 +712,9 @@ router.get('/metrics', async (req, res) => {
       plinkoByDay,
       topPlinkoPlayers,
       plinkoRiskDistribution,
+      crashTotals,
+      crashByDay,
+      topCrashPlayers,
       tradingTotals,
       cryptoByCoin,
       tradingByDay,
