@@ -174,10 +174,12 @@ router.get('/metrics', async (req, res) => {
       wins: Number(coinflipTotalsRow.wins || 0),
       losses: Number(coinflipTotalsRow.losses || 0),
       unique_players: Number(coinflipTotalsRow.unique_players || 0),
-      total_bet: Number(coinflipTotalsRow.total_bet || 0),
-      total_bet_won: Number(coinflipTotalsRow.total_bet_won || 0),
+      total_bet: Number(parseFloat(coinflipTotalsRow.total_bet || 0).toFixed(2)),
+      total_bet_won: Number(parseFloat(coinflipTotalsRow.total_bet_won || 0).toFixed(2)),
       win_rate: coinflipTotalsRow.total_games ? Number(((coinflipTotalsRow.wins || 0) / coinflipTotalsRow.total_games * 100).toFixed(2)) : 0,
-      house_profit: Number(((coinflipTotalsRow.total_bet || 0) - (coinflipTotalsRow.total_bet_won || 0) * 2).toFixed(2))
+      // House profit: losses collected minus wins paid out
+      // Players who lose contribute their bet, players who win get their bet back as profit
+      house_profit: Number((parseFloat(coinflipTotalsRow.total_bet || 0) - parseFloat(coinflipTotalsRow.total_bet_won || 0) * 2).toFixed(2))
     } : {
       total_games: 0, wins: 0, losses: 0, unique_players: 0, total_bet: 0, total_bet_won: 0, win_rate: 0, house_profit: 0
     };
@@ -202,12 +204,12 @@ router.get('/metrics', async (req, res) => {
       wins: Number(blackjackTotalsRow.wins || 0),
       losses: Number(blackjackTotalsRow.losses || 0),
       unique_players: Number(blackjackTotalsRow.unique_players || 0),
-      total_bet: Number(blackjackTotalsRow.total_bet || 0),
-      total_bet_won: Number(blackjackTotalsRow.total_bet_won || 0),
+      total_bet: Number(parseFloat(blackjackTotalsRow.total_bet || 0).toFixed(2)),
+      total_bet_won: Number(parseFloat(blackjackTotalsRow.total_bet_won || 0).toFixed(2)),
       blackjacks: Number(blackjackTotalsRow.blackjacks || 0),
       pushes: Number(blackjackTotalsRow.pushes || 0),
       win_rate: blackjackTotalsRow.total_games ? Number(((blackjackTotalsRow.wins || 0) / blackjackTotalsRow.total_games * 100).toFixed(2)) : 0,
-      house_profit: Number(((blackjackTotalsRow.total_bet || 0) - (blackjackTotalsRow.total_bet_won || 0) * 2).toFixed(2))
+      house_profit: Number((parseFloat(blackjackTotalsRow.total_bet || 0) - parseFloat(blackjackTotalsRow.total_bet_won || 0) * 2).toFixed(2))
     } : {
       total_games: 0, wins: 0, losses: 0, unique_players: 0, total_bet: 0, total_bet_won: 0, blackjacks: 0, pushes: 0, win_rate: 0, house_profit: 0
     };
@@ -292,10 +294,10 @@ router.get('/metrics', async (req, res) => {
       wins: Number(plinkoTotalsRow.wins || 0),
       losses: Number(plinkoTotalsRow.losses || 0),
       unique_players: Number(plinkoTotalsRow.unique_players || 0),
-      total_bet: Number(plinkoTotalsRow.total_bet || 0),
-      avg_multiplier: Number(Number(plinkoTotalsRow.avg_multiplier || 0).toFixed(2)),
-      max_multiplier: Number(Number(plinkoTotalsRow.max_multiplier || 0).toFixed(2)),
-      min_multiplier: Number(Number(plinkoTotalsRow.min_multiplier || 0).toFixed(2)),
+      total_bet: Number(parseFloat(plinkoTotalsRow.total_bet || 0).toFixed(2)),
+      avg_multiplier: Number(parseFloat(plinkoTotalsRow.avg_multiplier || 0).toFixed(2)),
+      max_multiplier: Number(parseFloat(plinkoTotalsRow.max_multiplier || 0).toFixed(2)),
+      min_multiplier: Number(parseFloat(plinkoTotalsRow.min_multiplier || 0).toFixed(2)),
       win_rate: plinkoTotalsRow.total_games ? Number(((plinkoTotalsRow.wins || 0) / plinkoTotalsRow.total_games * 100).toFixed(2)) : 0,
     } : {
       total_games: 0, wins: 0, losses: 0, unique_players: 0, total_bet: 0, avg_multiplier: 0, max_multiplier: 0, min_multiplier: 0, win_rate: 0
@@ -381,10 +383,10 @@ router.get('/metrics', async (req, res) => {
       wins: Number(crashTotalsRow.wins || 0),
       losses: Number(crashTotalsRow.losses || 0),
       unique_players: Number(crashTotalsRow.unique_players || 0),
-      total_bet: Number(crashTotalsRow.total_bet || 0),
-      avg_crash_point: Number(Number(crashTotalsRow.avg_crash_point || 0).toFixed(2)),
-      max_crash_point: Number(Number(crashTotalsRow.max_crash_point || 0).toFixed(2)),
-      min_crash_point: Number(Number(crashTotalsRow.min_crash_point || 0).toFixed(2)),
+      total_bet: Number(parseFloat(crashTotalsRow.total_bet || 0).toFixed(2)),
+      avg_crash_point: Number(parseFloat(crashTotalsRow.avg_crash_point || 0).toFixed(2)),
+      max_crash_point: Number(parseFloat(crashTotalsRow.max_crash_point || 0).toFixed(2)),
+      min_crash_point: Number(parseFloat(crashTotalsRow.min_crash_point || 0).toFixed(2)),
       win_rate: crashTotalsRow.total_games ? Number(((crashTotalsRow.wins || 0) / crashTotalsRow.total_games * 100).toFixed(2)) : 0,
     } : {
       total_games: 0, wins: 0, losses: 0, unique_players: 0, total_bet: 0, avg_crash_point: 0, max_crash_point: 0, min_crash_point: 0, win_rate: 0
