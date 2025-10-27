@@ -3,6 +3,8 @@ import Navbar from '../components/Navbar';
 import { walletAPI } from '../services/api';
 import { formatCurrency, getCurrencySymbol } from '../utils/formatters';
 import api from '../services/api';
+import { useSound } from '../hooks/useSound';
+import { SOUNDS } from '../utils/sounds';
 
 const Plinko = () => {
   const [wallet, setWallet] = useState(null);
@@ -12,75 +14,18 @@ const Plinko = () => {
   const [recentGames, setRecentGames] = useState([]);
   const canvasRef = useRef(null);
   const animationRef = useRef(null);
-  const audioCtxRef = useRef(null);
+  const { playSound, isMuted, toggleMute } = useSound();
+  const playPegSoundRef = useRef(() => {});
 
   // Fixed: Low risk, 8 rows only
   const rows = 8;
   const risk = 'low';
   const multipliers = [5.6, 2.1, 1.1, 1.0, 0.5, 1.0, 1.1, 2.1, 5.6];
 
-  const ensureAudioContext = () => {
-    if (!audioCtxRef.current) {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      audioCtxRef.current = new AudioCtx();
-    }
-    return audioCtxRef.current;
-  };
-
-  const playPegSound = (frequency = 400) => {
-    try {
-      const ctx = ensureAudioContext();
-      const now = ctx.currentTime;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(frequency, now);
-      gain.gain.setValueAtTime(0.05, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
-      osc.connect(gain).connect(ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.06);
-    } catch {}
-  };
-
-  const playWinSound = (multiplier) => {
-    try {
-      const ctx = ensureAudioContext();
-      const now = ctx.currentTime;
-      const baseFreq = multiplier > 10 ? 880 : multiplier > 2 ? 660 : 523.25;
-      const notes = [baseFreq, baseFreq * 1.26, baseFreq * 1.5];
-
-      notes.forEach((freq, i) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, now + i * 0.08);
-        gain.gain.setValueAtTime(0.0001, now + i * 0.08);
-        gain.gain.exponentialRampToValueAtTime(0.15, now + i * 0.08 + 0.01);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.3);
-        osc.connect(gain).connect(ctx.destination);
-        osc.start(now + i * 0.08);
-        osc.stop(now + i * 0.08 + 0.35);
-      });
-    } catch {}
-  };
-
-  const playLaunchSound = () => {
-    try {
-      const ctx = ensureAudioContext();
-      const now = ctx.currentTime;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(800, now);
-      osc.frequency.exponentialRampToValueAtTime(400, now + 0.15);
-      gain.gain.setValueAtTime(0.08, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
-      osc.connect(gain).connect(ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.16);
-    } catch {}
-  };
+  // Create ref for playSound to use in animation
+  useEffect(() => {
+    playPegSoundRef.current = () => playSound(SOUNDS.PLINKO_BOUNCE);
+  }, [playSound]);
 
   // Define loadWallet and loadRecentGames as useCallback to avoid dependency issues
   const loadWallet = useCallback(async () => {
@@ -406,7 +351,7 @@ const Plinko = () => {
             ball.y += moveSpeed;
           } else {
             // Hit the peg - bounce
-            playPegSound(400 + currentPathIndex * 50);
+            playPegSoundRef.current();
             ball.bouncing = true;
             
             // Determine next column based on path
@@ -659,13 +604,19 @@ const Plinko = () => {
       });
 
       // Play launch sound when ball is released
-      playLaunchSound();
+      playSound(SOUNDS.PLINKO_DROP);
 
       // Simulate the drop with the landing slot from server
       // Pass callback to sync result display with ball landing
       simulatePlinko(res.data.landingSlot, () => {
         // This callback fires when the ball actually lands in the slot
-        playWinSound(res.data.multiplier);
+        playSound(SOUNDS.PLINKO_LAND);
+        // Play win or loss sound based on multiplier
+        if (res.data.multiplier >= 1) {
+          playSound(SOUNDS.GAME_WIN);
+        } else {
+          playSound(SOUNDS.GAME_LOSS);
+        }
         setGameResult(res.data);
         setIsDropping(false);
         loadWallet();
@@ -699,15 +650,33 @@ const Plinko = () => {
                 {getCurrencySymbol('stoneworks_dollar')} {formatCurrency(wallet?.stoneworks_dollar || 0)}
               </h2>
             </div>
-            <div className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center">
-              <svg className="w-8 h-8 text-white/90" fill="currentColor" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" fill="none"/>
-                <circle cx="12" cy="12" r="2" fill="currentColor"/>
-                <circle cx="12" cy="7" r="1" fill="currentColor"/>
-                <circle cx="12" cy="17" r="1" fill="currentColor"/>
-                <circle cx="7" cy="12" r="1" fill="currentColor"/>
-                <circle cx="17" cy="12" r="1" fill="currentColor"/>
-              </svg>
+            <div className="flex items-center gap-3">
+              <div className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center">
+                <svg className="w-8 h-8 text-white/90" fill="currentColor" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" fill="none"/>
+                  <circle cx="12" cy="12" r="2" fill="currentColor"/>
+                  <circle cx="12" cy="7" r="1" fill="currentColor"/>
+                  <circle cx="12" cy="17" r="1" fill="currentColor"/>
+                  <circle cx="7" cy="12" r="1" fill="currentColor"/>
+                  <circle cx="17" cy="12" r="1" fill="currentColor"/>
+                </svg>
+              </div>
+              <button
+                onClick={toggleMute}
+                className="p-3 rounded-xl bg-white/20 hover:bg-white/30 backdrop-blur-sm transition-all"
+                title={isMuted ? 'Unmute sounds' : 'Mute sounds'}
+              >
+                {isMuted ? (
+                  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" clipRule="evenodd" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                  </svg>
+                ) : (
+                  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                  </svg>
+                )}
+              </button>
             </div>
           </div>
         </div>

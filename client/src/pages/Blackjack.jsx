@@ -1,8 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import Navbar from '../components/Navbar';
 import { walletAPI } from '../services/api';
 import { formatCurrency, getCurrencySymbol } from '../utils/formatters';
 import api from '../services/api';
+import { useSound } from '../hooks/useSound';
+import { SOUNDS } from '../utils/sounds';
 
 const Blackjack = () => {
   const [wallet, setWallet] = useState(null);
@@ -11,34 +13,7 @@ const Blackjack = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [message, setMessage] = useState('');
   const [recentGames, setRecentGames] = useState([]);
-  const audioCtxRef = useRef(null);
-
-  const ensureAudioContext = () => {
-    if (!audioCtxRef.current) {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      audioCtxRef.current = new AudioCtx();
-    }
-    return audioCtxRef.current;
-  };
-
-  const playWinChime = () => {
-    const ctx = ensureAudioContext();
-    const now = ctx.currentTime;
-    const notes = [523.25, 659.25, 783.99]; // C5, E5, G5
-
-    notes.forEach((freq, i) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, now + i * 0.08);
-      gain.gain.setValueAtTime(0.0001, now + i * 0.08);
-      gain.gain.exponentialRampToValueAtTime(0.2, now + i * 0.08 + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.25);
-      osc.connect(gain).connect(ctx.destination);
-      osc.start(now + i * 0.08);
-      osc.stop(now + i * 0.08 + 0.3);
-    });
-  };
+  const { playSound, isMuted, toggleMute } = useSound();
 
   useEffect(() => {
     loadWallet();
@@ -87,6 +62,12 @@ const Blackjack = () => {
         action: 'deal'
       });
 
+      // Play card deal sound
+      playSound(SOUNDS.CARD_DEAL);
+      setTimeout(() => playSound(SOUNDS.CARD_DEAL), 150);
+      setTimeout(() => playSound(SOUNDS.CARD_DEAL), 300);
+      setTimeout(() => playSound(SOUNDS.CARD_DEAL), 450);
+
       setGameState(res.data);
       
       if (res.data.gameOver) {
@@ -100,6 +81,9 @@ const Blackjack = () => {
 
   const handleHit = async () => {
     try {
+      // Play card deal sound
+      playSound(SOUNDS.CARD_DEAL);
+
       const res = await api.post('/games/blackjack', {
         betAmount: parseFloat(betAmount),
         action: 'hit',
@@ -122,6 +106,9 @@ const Blackjack = () => {
 
   const handleStand = async () => {
     try {
+      // Play card flip sound for dealer reveal
+      playSound(SOUNDS.CARD_FLIP);
+
       const res = await api.post('/games/blackjack', {
         betAmount: parseFloat(betAmount),
         action: 'stand',
@@ -144,30 +131,28 @@ const Blackjack = () => {
     switch (data.result) {
       case 'blackjack':
         msg = '🎉 BLACKJACK! You win 3:2!';
+        playSound(SOUNDS.BLACKJACK_WIN);
         break;
       case 'win':
       case 'dealer_bust':
         msg = '🎊 You Win!';
+        playSound(SOUNDS.GAME_WIN);
         break;
       case 'loss':
-        msg = '😔 Dealer Wins';
+      case 'dealer_blackjack':
+        msg = data.result === 'dealer_blackjack' ? '🃏 Dealer Blackjack' : '😔 Dealer Wins';
+        playSound(SOUNDS.GAME_LOSS);
         break;
       case 'bust':
         msg = '💥 Bust! You Lose';
+        playSound(SOUNDS.BUST);
         break;
       case 'push':
         msg = '🤝 Push - Bet Returned';
-        break;
-      case 'dealer_blackjack':
-        msg = '🃏 Dealer Blackjack';
+        playSound(SOUNDS.PUSH);
         break;
     }
     setMessage(msg);
-    
-    // Play win chime if player won
-    if (data.won) {
-      try { playWinChime(); } catch {}
-    }
     
     loadWallet();
     loadRecentGames();
@@ -253,14 +238,32 @@ const Blackjack = () => {
                     {getCurrencySymbol('stoneworks_dollar')} {Number(wallet?.stoneworks_dollar || 0).toFixed(0)}
                   </p>
                 </div>
-                {gameState?.betAmount && (
-                  <div className="px-4 py-2 bg-amber-500/20 rounded-xl border border-amber-500/50">
-                    <p className="text-sm text-amber-300">Current Bet</p>
-                    <p className="text-2xl font-bold text-amber-400">
-                      {getCurrencySymbol('stoneworks_dollar')} {Number(gameState.betAmount).toFixed(0)}
-                    </p>
-                  </div>
-                )}
+                <div className="flex items-center gap-3">
+                  {gameState?.betAmount && (
+                    <div className="px-4 py-2 bg-amber-500/20 rounded-xl border border-amber-500/50">
+                      <p className="text-sm text-amber-300">Current Bet</p>
+                      <p className="text-2xl font-bold text-amber-400">
+                        {getCurrencySymbol('stoneworks_dollar')} {Number(gameState.betAmount).toFixed(0)}
+                      </p>
+                    </div>
+                  )}
+                  <button
+                    onClick={toggleMute}
+                    className="p-3 rounded-xl bg-phantom-bg-tertiary hover:bg-phantom-bg-tertiary/80 border border-phantom-border transition-all"
+                    title={isMuted ? 'Unmute sounds' : 'Mute sounds'}
+                  >
+                    {isMuted ? (
+                      <svg className="w-6 h-6 text-phantom-text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" clipRule="evenodd" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                      </svg>
+                    ) : (
+                      <svg className="w-6 h-6 text-phantom-text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
               </div>
 
               {/* Game Board */}

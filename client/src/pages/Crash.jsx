@@ -3,6 +3,8 @@ import Navbar from '../components/Navbar';
 import { walletAPI } from '../services/api';
 import { formatCurrency, getCurrencySymbol } from '../utils/formatters';
 import api from '../services/api';
+import { useSound } from '../hooks/useSound';
+import { SOUNDS } from '../utils/sounds';
 
 const Crash = () => {
   const [wallet, setWallet] = useState(null);
@@ -16,7 +18,9 @@ const Crash = () => {
   const animationRef = useRef(null);
   const startTimeRef = useRef(null);
   const timeoutRef = useRef(null);
+  const tickIntervalRef = useRef(null);
   const [graphPoints, setGraphPoints] = useState([]);
+  const { playSound, isMuted, toggleMute } = useSound();
 
   const loadWallet = useCallback(async () => {
     try {
@@ -47,6 +51,18 @@ const Crash = () => {
     setGamePhase('rising');
     setGraphPoints([]);
     
+    // Play start sound
+    playSound(SOUNDS.CRASH_START);
+    
+    // Play subtle tick sounds during rise
+    let tickCount = 0;
+    tickIntervalRef.current = setInterval(() => {
+      tickCount++;
+      if (tickCount % 8 === 0) { // Every 8th tick
+        playSound(SOUNDS.CRASH_TICK, 0.5);
+      }
+    }, 100);
+    
     const animate = () => {
       const elapsed = (Date.now() - startTimeRef.current) / 1000;
       
@@ -62,10 +78,21 @@ const Crash = () => {
         setCurrentMultiplier(crashPoint);
         setGamePhase('crashed');
         setIsPlaying(false);
+        
+        // Clear tick interval
+        if (tickIntervalRef.current) {
+          clearInterval(tickIntervalRef.current);
+          tickIntervalRef.current = null;
+        }
+        
         if (animationRef.current) {
           cancelAnimationFrame(animationRef.current);
           animationRef.current = null;
         }
+        
+        // Play crash sound
+        playSound(SOUNDS.CRASH_EXPLODE);
+        
         // Call completion callback
         if (onComplete) onComplete();
         return;
@@ -115,6 +142,12 @@ const Crash = () => {
       animateMultiplier(res.data.crashPoint, () => {
         // Show result after crash animation completes
         timeoutRef.current = setTimeout(() => {
+          // Play result sound
+          if (res.data.won) {
+            playSound(SOUNDS.CRASH_CASHOUT);
+          } else {
+            playSound(SOUNDS.GAME_LOSS);
+          }
           setGameResult(res.data);
           loadWallet();
           loadRecentGames();
@@ -138,6 +171,9 @@ const Crash = () => {
       }
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
+      }
+      if (tickIntervalRef.current) {
+        clearInterval(tickIntervalRef.current);
       }
     };
   }, []);
@@ -167,10 +203,28 @@ const Crash = () => {
                 {getCurrencySymbol('stoneworks_dollar')} {formatCurrency(wallet?.stoneworks_dollar || 0)}
               </h2>
             </div>
-            <div className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center">
-              <svg className="w-8 h-8 text-white/90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-              </svg>
+            <div className="flex items-center gap-3">
+              <div className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center">
+                <svg className="w-8 h-8 text-white/90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                </svg>
+              </div>
+              <button
+                onClick={toggleMute}
+                className="p-3 rounded-xl bg-white/20 hover:bg-white/30 backdrop-blur-sm transition-all"
+                title={isMuted ? 'Unmute sounds' : 'Mute sounds'}
+              >
+                {isMuted ? (
+                  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" clipRule="evenodd" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                  </svg>
+                ) : (
+                  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                  </svg>
+                )}
+              </button>
             </div>
           </div>
         </div>
