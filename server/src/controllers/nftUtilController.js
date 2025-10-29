@@ -2,73 +2,61 @@ import db from '../config/database.js';
 
 // Like/Unlike NFT
 export const likeNFT = async (req, res) => {
-  const client = await db.pool.getClient();
   try {
     const userId = req.user.id;
     const { id } = req.params;
 
-    await client.query('BEGIN');
+    await db.tx(async (client) => {
+      // Check if NFT exists
+      const nftCheck = await client.query('SELECT id FROM nfts WHERE id = $1', [id]);
+      if (nftCheck.length === 0) {
+        throw new Error('NFT not found');
+      }
 
-    // Check if NFT exists
-    const nftCheck = await client.query('SELECT id FROM nfts WHERE id = $1', [id]);
-    if (nftCheck.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({ message: 'NFT not found' });
-    }
+      // Try to insert like
+      const result = await client.query(
+        `INSERT INTO nft_likes (nft_id, user_id)
+         VALUES ($1, $2)
+         ON CONFLICT (nft_id, user_id) DO NOTHING
+         RETURNING id`,
+        [id, userId]
+      );
 
-    // Try to insert like
-    const result = await client.query(
-      `INSERT INTO nft_likes (nft_id, user_id)
-       VALUES ($1, $2)
-       ON CONFLICT (nft_id, user_id) DO NOTHING
-       RETURNING id`,
-      [id, userId]
-    );
-
-    if (result.rows.length > 0) {
-      // Like was inserted, increment like count
-      await client.query('UPDATE nfts SET like_count = like_count + 1 WHERE id = $1', [id]);
-    }
-
-    await client.query('COMMIT');
+      if (result.length > 0) {
+        // Like was inserted, increment like count
+        await client.exec('UPDATE nfts SET like_count = like_count + 1 WHERE id = $1', [id]);
+      }
+    });
 
     res.json({ message: 'NFT liked successfully' });
   } catch (error) {
-    await client.query('ROLLBACK');
     console.error('Like NFT error:', error);
-    res.status(500).json({ message: 'Error liking NFT', error: error.message });
-  } finally {
-    client.release();
+    const statusCode = error.message === 'NFT not found' ? 404 : 500;
+    res.status(statusCode).json({ message: error.message || 'Error liking NFT' });
   }
 };
 
 export const unlikeNFT = async (req, res) => {
-  const client = await db.pool.getClient();
   try {
     const userId = req.user.id;
     const { id } = req.params;
 
-    await client.query('BEGIN');
+    await db.tx(async (client) => {
+      const result = await client.query(
+        'DELETE FROM nft_likes WHERE nft_id = $1 AND user_id = $2 RETURNING id',
+        [id, userId]
+      );
 
-    const result = await client.query(
-      'DELETE FROM nft_likes WHERE nft_id = $1 AND user_id = $2 RETURNING id',
-      [id, userId]
-    );
-
-    if (result.rows.length > 0) {
-      // Like was deleted, decrement like count
-      await client.query('UPDATE nfts SET like_count = like_count - 1 WHERE id = $1', [id]);
-    }
-
-    await client.query('COMMIT');
+      if (result.length > 0) {
+        // Like was deleted, decrement like count
+        await client.exec('UPDATE nfts SET like_count = like_count - 1 WHERE id = $1', [id]);
+      }
+    });
 
     res.json({ message: 'NFT unliked successfully' });
   } catch (error) {
-    await client.query('ROLLBACK');
     console.error('Unlike NFT error:', error);
     res.status(500).json({ message: 'Error unliking NFT', error: error.message });
-  } finally {
-    client.release();
   }
 };
 

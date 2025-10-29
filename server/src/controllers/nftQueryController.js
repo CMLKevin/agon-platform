@@ -92,7 +92,7 @@ export const getAllNFTs = async (req, res) => {
     query += ` OFFSET $${paramCount}`;
     params.push(offsetValue);
 
-    const result = await db.query(query, params);
+    const nfts = await db.query(query, params);
 
     // Get total count
     let countQuery = `SELECT COUNT(*) FROM nfts n WHERE 1=1`;
@@ -110,10 +110,10 @@ export const getAllNFTs = async (req, res) => {
     }
 
     const countResult = await db.query(countQuery, countParams);
-    const totalCount = parseInt(countResult.rows[0].count);
+    const totalCount = parseInt(countResult[0].count);
 
     res.json({
-      nfts: result.rows,
+      nfts: nfts,
       pagination: {
         total: totalCount,
         limit: limitValue,
@@ -146,14 +146,14 @@ export const getNFTById = async (req, res) => {
       [id]
     );
 
-    if (nftResult.rows.length === 0) {
+    if (nftResult.length === 0) {
       return res.status(404).json({ message: 'NFT not found' });
     }
 
-    const nft = nftResult.rows[0];
+    const nft = nftResult[0];
 
     // Get active bids (orderbook)
-    const bidsResult = await db.query(
+    const bids = await db.query(
       `SELECT 
         b.*,
         u.username as bidder_username
@@ -165,7 +165,7 @@ export const getNFTById = async (req, res) => {
     );
 
     // Get transaction history
-    const transactionsResult = await db.query(
+    const transactions = await db.query(
       `SELECT 
         t.*,
         from_user.username as from_username,
@@ -186,8 +186,8 @@ export const getNFTById = async (req, res) => {
 
     res.json({
       nft: nft,
-      bids: bidsResult.rows,
-      transactions: transactionsResult.rows
+      bids: bids,
+      transactions: transactions
     });
 
   } catch (error) {
@@ -219,7 +219,7 @@ export const getUserNFTs = async (req, res) => {
 
     query += ` ORDER BY n.minted_at DESC`;
 
-    const result = await db.query(query, [userId]);
+    const nfts = await db.query(query, [userId]);
 
     // Get user stats
     const statsResult = await db.query(
@@ -233,8 +233,8 @@ export const getUserNFTs = async (req, res) => {
     );
 
     res.json({
-      nfts: result.rows,
-      stats: statsResult.rows[0]
+      nfts: nfts,
+      stats: statsResult[0]
     });
 
   } catch (error) {
