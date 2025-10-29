@@ -32,7 +32,14 @@ const MintNFT = () => {
   useEffect(() => {
     loadWallet();
     loadCategories();
-  }, []);
+    
+    // Cleanup image preview URL on unmount to prevent memory leaks
+    return () => {
+      if (imagePreview && imagePreview.startsWith('blob:')) {
+        URL.revokeObjectURL(imagePreview);
+      }
+    };
+  }, [imagePreview]);
 
   const loadWallet = async () => {
     try {

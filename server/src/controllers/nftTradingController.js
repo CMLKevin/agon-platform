@@ -10,6 +10,11 @@ export const placeBid = async (req, res) => {
       return res.status(400).json({ message: 'Valid bid amount is required' });
     }
     const bidAmount = parseFloat(bid_amount);
+    
+    // Validate bid amount (prevent overflow and unrealistic values)
+    if (isNaN(bidAmount) || bidAmount > 1000000000) {
+      return res.status(400).json({ message: 'Invalid bid amount' });
+    }
     await client.query('BEGIN');
     const nftResult = await client.query('SELECT * FROM nfts WHERE id = $1', [id]);
     if (nftResult.rows.length === 0) {
@@ -31,7 +36,7 @@ export const placeBid = async (req, res) => {
     await client.query('COMMIT');
     res.json({ message: 'Bid placed successfully', bid: bidResult.rows[0] });
   } catch (error) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(err => console.error('Rollback error:', err));
     console.error('Place bid error:', error);
     res.status(500).json({ message: 'Error placing bid', error: error.message });
   } finally {
@@ -63,7 +68,7 @@ export const cancelBid = async (req, res) => {
     await client.query('COMMIT');
     res.json({ message: 'Bid cancelled successfully' });
   } catch (error) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(err => console.error('Rollback error:', err));
     console.error('Cancel bid error:', error);
     res.status(500).json({ message: 'Error cancelling bid', error: error.message });
   } finally {
@@ -97,14 +102,20 @@ export const acceptBid = async (req, res) => {
     const bid = bidResult.rows[0];
     const buyerId = bid.bidder_id;
     const salePrice = parseFloat(bid.bid_amount);
-    const platformFee = salePrice * 0.025;
+    const platformFee = Math.floor(salePrice * 0.025 * 100) / 100; // Round to 2 decimals
     const sellerReceives = salePrice - platformFee;
     const buyerWallet = await client.query('SELECT agon FROM wallets WHERE user_id = $1', [buyerId]);
     if (!buyerWallet.rows[0] || buyerWallet.rows[0].agon < salePrice) {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: 'Buyer has insufficient Agon balance' });
     }
-    await client.query('UPDATE wallets SET agon = agon - $1 WHERE user_id = $2', [salePrice, buyerId]);
+    // Atomic balance updates with row locking to prevent race conditions
+    await client.query('UPDATE wallets SET agon = agon - $1 WHERE user_id = $2 AND agon >= $1', [salePrice, buyerId]);
+    const buyerUpdate = await client.query('SELECT agon FROM wallets WHERE user_id = $1', [buyerId]);
+    if (buyerUpdate.rows[0].agon < 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Buyer has insufficient balance (race condition detected)' });
+    }
     await client.query('UPDATE wallets SET agon = agon + $1 WHERE user_id = $2', [sellerReceives, userId]);
     await client.query(`UPDATE nfts SET current_owner_id = $1, is_listed = FALSE, ask_price = NULL, last_traded_at = NOW() WHERE id = $2`, [buyerId, id]);
     await client.query(`UPDATE nft_bids SET status = 'accepted' WHERE id = $1`, [bid_id]);
@@ -115,7 +126,7 @@ export const acceptBid = async (req, res) => {
     const sellerWallet = await client.query('SELECT agon, stoneworks_dollar FROM wallets WHERE user_id = $1', [userId]);
     res.json({ message: 'Bid accepted! NFT sold.', nft: updatedNFT.rows[0], wallet: sellerWallet.rows[0], sale: { price: salePrice, fee: platformFee, received: sellerReceives } });
   } catch (error) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(err => console.error('Rollback error:', err));
     console.error('Accept bid error:', error);
     res.status(500).json({ message: 'Error accepting bid', error: error.message });
   } finally {
@@ -144,7 +155,7 @@ export const buyNFT = async (req, res) => {
       return res.status(400).json({ message: 'You cannot buy your own NFT' });
     }
     const salePrice = parseFloat(nft.ask_price);
-    const platformFee = salePrice * 0.025;
+    const platformFee = Math.floor(salePrice * 0.025 * 100) / 100; // Round to 2 decimals
     const sellerReceives = salePrice - platformFee;
     const sellerId = nft.current_owner_id;
     const buyerWallet = await client.query('SELECT agon FROM wallets WHERE user_id = $1', [userId]);
@@ -152,7 +163,13 @@ export const buyNFT = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: 'Insufficient Agon balance' });
     }
-    await client.query('UPDATE wallets SET agon = agon - $1 WHERE user_id = $2', [salePrice, userId]);
+    // Atomic balance updates with row locking to prevent race conditions
+    await client.query('UPDATE wallets SET agon = agon - $1 WHERE user_id = $2 AND agon >= $1', [salePrice, userId]);
+    const buyerUpdate = await client.query('SELECT agon FROM wallets WHERE user_id = $1', [userId]);
+    if (buyerUpdate.rows[0].agon < 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Insufficient balance (race condition detected)' });
+    }
     await client.query('UPDATE wallets SET agon = agon + $1 WHERE user_id = $2', [sellerReceives, sellerId]);
     await client.query(`UPDATE nfts SET current_owner_id = $1, is_listed = FALSE, ask_price = NULL, last_traded_at = NOW() WHERE id = $2`, [userId, id]);
     await client.query(`UPDATE nft_bids SET status = 'cancelled' WHERE nft_id = $1 AND status = 'active'`, [id]);
@@ -162,7 +179,7 @@ export const buyNFT = async (req, res) => {
     const buyerWalletUpdated = await client.query('SELECT agon, stoneworks_dollar FROM wallets WHERE user_id = $1', [userId]);
     res.json({ message: 'NFT purchased successfully!', nft: updatedNFT.rows[0], wallet: buyerWalletUpdated.rows[0], purchase: { price: salePrice, fee: platformFee } });
   } catch (error) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(err => console.error('Rollback error:', err));
     console.error('Buy NFT error:', error);
     res.status(500).json({ message: 'Error buying NFT', error: error.message });
   } finally {

@@ -42,6 +42,25 @@ export const mintNFT = async (req, res) => {
       return res.status(400).json({ message: 'NFT name must be 255 characters or less' });
     }
 
+    // Validate edition numbers
+    const editionNum = parseInt(edition_number) || 1;
+    const editionTot = parseInt(edition_total) || 1;
+    
+    if (editionNum < 1 || editionTot < 1) {
+      return res.status(400).json({ message: 'Edition numbers must be positive' });
+    }
+    
+    if (editionNum > editionTot) {
+      return res.status(400).json({ message: 'Edition number cannot exceed total editions' });
+    }
+
+    // Validate category
+    const validCategories = ['nation_flags', 'notable_builds', 'memes_moments', 'player_avatars', 'event_commemorations', 'achievement_badges', 'map_art', 'historical_documents', 'other'];
+    const selectedCategory = category || 'other';
+    if (!validCategories.includes(selectedCategory)) {
+      return res.status(400).json({ message: 'Invalid category' });
+    }
+
     const MINT_COST = 100; // 100 Agon
 
     await client.query('BEGIN');
@@ -101,10 +120,10 @@ export const mintNFT = async (req, res) => {
         description?.trim() || null,
         imageUrl,
         thumbnailUrl,
-        category || 'other',
+        selectedCategory,
         tagsArray,
-        edition_number || 1,
-        edition_total || 1,
+        editionNum,
+        editionTot,
         MINT_COST
       ]
     );
@@ -134,7 +153,7 @@ export const mintNFT = async (req, res) => {
     });
 
   } catch (error) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(err => console.error('Rollback error:', err));
     console.error('Mint NFT error:', error);
     
     // Clean up uploaded file on error

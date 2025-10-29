@@ -37,6 +37,7 @@ const NFTMarket = () => {
 
   useEffect(() => {
     loadNFTs();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters, pagination.offset]);
 
   const loadCategories = async () => {
