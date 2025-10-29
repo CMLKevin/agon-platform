@@ -13,6 +13,7 @@ import auctionRoutes from './routes/auction.js';
 import gameRoutes from './routes/games.js';
 import cryptoRoutes from './routes/crypto.js';
 import tradingRoutes from './routes/trading.js';
+import nftRoutes from './routes/nft.js';
 import db from './config/database.js';
 import { startMaintenanceFeeScheduler } from './jobs/maintenanceFees.js';
 
@@ -50,6 +51,10 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser());
 
+// Serve uploaded files statically
+const uploadsPath = path.join(__dirname, '../uploads');
+app.use('/uploads', express.static(uploadsPath));
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', message: 'Agon server is running', environment: process.env.NODE_ENV || 'development' });
@@ -65,6 +70,7 @@ app.use('/api/auctions', auctionRoutes);
 app.use('/api/crypto', cryptoRoutes);
 app.use('/api/trading', tradingRoutes);
 app.use('/api/games', gameRoutes);
+app.use('/api/nfts', nftRoutes);
 
 // Price fetching now handled by Yahoo Finance API via tradingPriceService
 
