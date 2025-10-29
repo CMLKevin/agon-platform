@@ -9,7 +9,8 @@
     "start": "node src/server.js",
     "test": "node tests/test-trading.js",
     "db:backup": "node scripts/backup-db.js",
-    "db:restore": "node scripts/restore-db.js"
+    "db:restore": "node scripts/restore-db.js",
+    "migrate:nft": "node run-nft-migration.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
