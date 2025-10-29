@@ -17,6 +17,10 @@ import Blackjack from './pages/Blackjack';
 import Plinko from './pages/Plinko';
 import Crash from './pages/Crash';
 import Trading from './pages/Trading';
+import NFTMarket from './pages/NFTMarket';
+import MintNFT from './pages/MintNFT';
+import NFTDetail from './pages/NFTDetail';
+import MyNFTs from './pages/MyNFTs';
 
 function App() {
   return (
@@ -147,6 +151,38 @@ function App() {
             element={
               <ProtectedRoute>
                 <Trading />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/nft-market"
+            element={
+              <ProtectedRoute>
+                <NFTMarket />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/nft/mint"
+            element={
+              <ProtectedRoute>
+                <MintNFT />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/nft/:id"
+            element={
+              <ProtectedRoute>
+                <NFTDetail />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/my-nfts"
+            element={
+              <ProtectedRoute>
+                <MyNFTs />
               </ProtectedRoute>
             }
           />

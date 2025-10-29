@@ -108,5 +108,34 @@ export const tradingAPI = {
   getCurrentPrices: () => api.get('/trading/prices'),
 };
 
+// NFT Marketplace endpoints
+export const nftAPI = {
+  // Query endpoints
+  getAllNFTs: (params = {}) => api.get('/nfts', { params }),
+  getNFTById: (id) => api.get(`/nfts/${id}`),
+  getUserNFTs: (userId, includeCreated = false) => 
+    api.get(`/nfts/user/${userId}`, { params: { include_created: includeCreated } }),
+  getCategories: () => api.get('/nfts/categories'),
+  
+  // Minting (multipart/form-data)
+  mintNFT: (formData) => api.post('/nfts/mint', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
+  
+  // Listing
+  listNFT: (id, askPrice) => api.post(`/nfts/${id}/list`, { ask_price: askPrice }),
+  unlistNFT: (id) => api.post(`/nfts/${id}/unlist`),
+  
+  // Trading
+  placeBid: (id, bidAmount) => api.post(`/nfts/${id}/bid`, { bid_amount: bidAmount }),
+  acceptBid: (id, bidId) => api.post(`/nfts/${id}/accept-bid`, { bid_id: bidId }),
+  buyNFT: (id) => api.post(`/nfts/${id}/buy`),
+  cancelBid: (bidId) => api.delete(`/nfts/bids/${bidId}`),
+  
+  // Interaction
+  likeNFT: (id) => api.post(`/nfts/${id}/like`),
+  unlikeNFT: (id) => api.delete(`/nfts/${id}/unlike`),
+};
+
 export default api;
 
