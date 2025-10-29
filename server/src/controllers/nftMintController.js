@@ -35,8 +35,6 @@ async function generateThumbnail(imagePath) {
 
 // Mint new NFT
 export const mintNFT = async (req, res) => {
-  let client;
-  
   try {
     console.log('=== Mint NFT Request Start ===');
     console.log('User ID:', req.user?.id);
@@ -50,10 +48,6 @@ export const mintNFT = async (req, res) => {
       console.error('ERROR: No file uploaded');
       return res.status(400).json({ message: 'Image file is required' });
     }
-    
-    console.log('Getting DB client...');
-    client = await db.pool.getClient();
-    console.log('DB client acquired');
 
     if (!name || name.trim().length === 0) {
       return res.status(400).json({ message: 'NFT name is required' });
@@ -83,29 +77,6 @@ export const mintNFT = async (req, res) => {
     }
 
     const MINT_COST = 100; // 100 Agon
-
-    console.log('Starting transaction...');
-    await client.query('BEGIN');
-
-    // Check user's Agon balance
-    console.log('Checking wallet balance...');
-    const walletResult = await client.query(
-      'SELECT agon FROM wallets WHERE user_id = $1',
-      [userId]
-    );
-
-    if (!walletResult.rows[0] || walletResult.rows[0].agon < MINT_COST) {
-      console.error('ERROR: Insufficient balance');
-      await client.query('ROLLBACK').catch(err => console.error('Rollback error:', err));
-      return res.status(400).json({ message: 'Insufficient Agon balance. Minting costs 100 Agon.' });
-    }
-    
-    console.log('Balance OK, deducting minting cost...');
-    // Deduct minting cost from user's wallet
-    await client.query(
-      'UPDATE wallets SET agon = agon - $1 WHERE user_id = $2',
-      [MINT_COST, userId]
-    );
 
     // Generate thumbnail
     console.log('Generating image URLs...');
@@ -137,57 +108,80 @@ export const mintNFT = async (req, res) => {
       }
     }
 
-    // Insert NFT
-    console.log('Inserting NFT into database...');
-    console.log('NFT data:', { name: name.trim(), category: selectedCategory, editionNum, editionTot });
-    
-    const nftResult = await client.query(
-      `INSERT INTO nfts (
-        creator_id, current_owner_id, name, description, image_url, thumbnail_url,
-        category, stoneworks_tags, edition_number, edition_total, mint_price
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-      RETURNING *`,
-      [
-        userId,
-        userId,
-        name.trim(),
-        description?.trim() || null,
-        imageUrl,
-        thumbnailUrl,
-        selectedCategory,
-        tagsArray,
-        editionNum,
-        editionTot,
-        MINT_COST
-      ]
-    );
+    // Execute transaction using db.tx wrapper
+    console.log('Starting transaction...');
+    const result = await db.tx(async (client) => {
+      // Check user's Agon balance
+      console.log('Checking wallet balance...');
+      const walletCheck = await client.queryOne(
+        'SELECT agon FROM wallets WHERE user_id = $1',
+        [userId]
+      );
 
-    const nft = nftResult.rows[0];
-    console.log('NFT inserted with ID:', nft.id);
+      if (!walletCheck || walletCheck.agon < MINT_COST) {
+        console.error('ERROR: Insufficient balance');
+        throw new Error('Insufficient Agon balance. Minting costs 100 Agon.');
+      }
+      
+      console.log('Balance OK, deducting minting cost...');
+      // Deduct minting cost from user's wallet
+      await client.exec(
+        'UPDATE wallets SET agon = agon - $1 WHERE user_id = $2',
+        [MINT_COST, userId]
+      );
 
-    // Record transaction
-    console.log('Recording transaction...');
-    await client.query(
-      `INSERT INTO nft_transactions (
-        nft_id, to_user_id, amount, fee, net_amount, transaction_type, notes
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [nft.id, userId, MINT_COST, 0, MINT_COST, 'mint', 'NFT minted']
-    );
+      // Insert NFT
+      console.log('Inserting NFT into database...');
+      console.log('NFT data:', { name: name.trim(), category: selectedCategory, editionNum, editionTot });
+      
+      const nftRows = await client.query(
+        `INSERT INTO nfts (
+          creator_id, current_owner_id, name, description, image_url, thumbnail_url,
+          category, stoneworks_tags, edition_number, edition_total, mint_price
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        RETURNING *`,
+        [
+          userId,
+          userId,
+          name.trim(),
+          description?.trim() || null,
+          imageUrl,
+          thumbnailUrl,
+          selectedCategory,
+          tagsArray,
+          editionNum,
+          editionTot,
+          MINT_COST
+        ]
+      );
 
-    console.log('Committing transaction...');
-    await client.query('COMMIT');
+      const nft = nftRows[0];
+      console.log('NFT inserted with ID:', nft.id);
+
+      // Record transaction
+      console.log('Recording transaction...');
+      await client.exec(
+        `INSERT INTO nft_transactions (
+          nft_id, to_user_id, amount, fee, net_amount, transaction_type, notes
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [nft.id, userId, MINT_COST, 0, MINT_COST, 'mint', 'NFT minted']
+      );
+
+      // Get updated wallet
+      const updatedWallet = await client.queryOne(
+        'SELECT agon, stoneworks_dollar FROM wallets WHERE user_id = $1',
+        [userId]
+      );
+
+      return { nft, wallet: updatedWallet };
+    });
+
     console.log('Transaction committed successfully');
-
-    // Get updated wallet
-    const updatedWallet = await client.query(
-      'SELECT agon, stoneworks_dollar FROM wallets WHERE user_id = $1',
-      [userId]
-    );
 
     res.status(201).json({
       message: 'NFT minted successfully!',
-      nft: nft,
-      wallet: updatedWallet.rows[0]
+      nft: result.nft,
+      wallet: result.wallet
     });
 
   } catch (error) {
@@ -196,10 +190,6 @@ export const mintNFT = async (req, res) => {
     console.error('Error stack:', error.stack);
     console.error('Error code:', error.code);
     console.error('Error detail:', error.detail);
-    
-    if (client) {
-      await client.query('ROLLBACK').catch(err => console.error('Rollback error:', err));
-    }
     
     // Clean up uploaded file on error
     if (req.file) {
@@ -211,15 +201,12 @@ export const mintNFT = async (req, res) => {
       }
     }
     
-    res.status(500).json({ 
-      message: 'Error minting NFT', 
-      error: error.message,
+    // Return appropriate status code
+    const statusCode = error.message.includes('Insufficient') ? 400 : 500;
+    
+    res.status(statusCode).json({ 
+      message: error.message || 'Error minting NFT',
       details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
-  } finally {
-    if (client) {
-      client.release();
-      console.log('DB client released');
-    }
   }
 };
