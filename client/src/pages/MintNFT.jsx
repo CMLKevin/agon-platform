@@ -3,9 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { walletAPI, nftAPI } from '../services/api';
 import { formatCurrency, getCurrencySymbol } from '../utils/formatters';
+import { useToast } from '../components/Toast';
+import Breadcrumb from '../components/Breadcrumb';
 
 const MintNFT = () => {
   const navigate = useNavigate();
+  const { success, error: showError } = useToast();
   const [wallet, setWallet] = useState(null);
   const [categories, setCategories] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -62,13 +65,13 @@ const MintNFT = () => {
     if (file) {
       // Validate file type
       if (!['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'].includes(file.type)) {
-        alert('Please select a valid image file (JPEG, PNG, GIF, or WEBP)');
+        showError('Please select a valid image file (JPEG, PNG, GIF, or WEBP)');
         return;
       }
       
       // Validate file size (10MB)
       if (file.size > 10 * 1024 * 1024) {
-        alert('Image must be less than 10MB');
+        showError('Image must be less than 10MB');
         return;
       }
       
@@ -87,17 +90,17 @@ const MintNFT = () => {
     e.preventDefault();
     
     if (!imageFile) {
-      alert('Please select an image');
+      showError('Please select an image');
       return;
     }
     
     if (!formData.name.trim()) {
-      alert('Please enter an NFT name');
+      showError('Please enter an NFT name');
       return;
     }
     
     if (wallet.agon < MINT_COST) {
-      alert(`Insufficient Agon balance. Minting costs ${MINT_COST} Agon.`);
+      showError(`Insufficient Agon balance. Minting costs ${MINT_COST} Agon.`);
       return;
     }
     
@@ -116,21 +119,29 @@ const MintNFT = () => {
       
       const res = await nftAPI.mintNFT(data);
       
-      alert('NFT minted successfully!');
+      success('NFT minted successfully! 🎉');
       navigate(`/nft/${res.data.nft.id}`);
     } catch (error) {
       console.error('Minting error:', error);
-      alert(error.response?.data?.message || 'Failed to mint NFT');
+      showError(error.response?.data?.message || 'Failed to mint NFT');
     } finally {
       setIsLoading(false);
     }
   };
+
+  const breadcrumbItems = [
+    { label: 'NFT Market', href: '/nft-market' },
+    { label: 'Mint NFT' }
+  ];
 
   return (
     <div className="min-h-screen bg-phantom-bg-primary">
       <Navbar />
       
       <div className="container mx-auto px-4 py-8 max-w-4xl">
+        {/* Breadcrumb */}
+        <Breadcrumb items={breadcrumbItems} />
+        
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-phantom-text-primary mb-2 bg-gradient-to-r from-purple-400 to-pink-500 bg-clip-text text-transparent">

@@ -8,6 +8,7 @@ import { useRecentlyViewed } from '../hooks/useRecentlyViewed';
 import ImageLightbox from '../components/ImageLightbox';
 import ShareNFT from '../components/ShareNFT';
 import Breadcrumb from '../components/Breadcrumb';
+import NFTMetaTags from '../components/NFTMetaTags';
 
 const NFTDetail = () => {
   const { id } = useParams();
@@ -80,18 +81,18 @@ const NFTDetail = () => {
 
   const handleListNFT = async () => {
     if (!askPrice || parseFloat(askPrice) <= 0) {
-      alert('Please enter a valid ask price');
+      showError('Please enter a valid ask price');
       return;
     }
 
     setIsSubmitting(true);
     try {
       await nftAPI.listNFT(id, parseFloat(askPrice));
-      alert('NFT listed successfully!');
+      success('NFT listed successfully! 🎉');
       loadNFTDetails();
     } catch (error) {
       console.error('List error:', error);
-      alert(error.response?.data?.message || 'Failed to list NFT');
+      showError(error.response?.data?.message || 'Failed to list NFT');
     } finally {
       setIsSubmitting(false);
     }
@@ -103,11 +104,11 @@ const NFTDetail = () => {
     setIsSubmitting(true);
     try {
       await nftAPI.unlistNFT(id);
-      alert('NFT unlisted successfully!');
+      success('NFT unlisted successfully');
       loadNFTDetails();
     } catch (error) {
       console.error('Unlist error:', error);
-      alert(error.response?.data?.message || 'Failed to unlist NFT');
+      showError(error.response?.data?.message || 'Failed to unlist NFT');
     } finally {
       setIsSubmitting(false);
     }
@@ -115,26 +116,26 @@ const NFTDetail = () => {
 
   const handlePlaceBid = async () => {
     if (!bidAmount || parseFloat(bidAmount) <= 0) {
-      alert('Please enter a valid bid amount');
+      showError('Please enter a valid bid amount');
       return;
     }
 
     const bid = parseFloat(bidAmount);
     if (wallet.agon < bid) {
-      alert('Insufficient Agon balance');
+      showError('Insufficient Agon balance');
       return;
     }
 
     setIsSubmitting(true);
     try {
       await nftAPI.placeBid(id, bid);
-      alert('Bid placed successfully!');
+      success('Bid placed successfully! 🎯');
       setBidAmount('');
       loadNFTDetails();
       loadWallet();
     } catch (error) {
       console.error('Bid error:', error);
-      alert(error.response?.data?.message || 'Failed to place bid');
+      showError(error.response?.data?.message || 'Failed to place bid');
     } finally {
       setIsSubmitting(false);
     }
@@ -146,12 +147,12 @@ const NFTDetail = () => {
     setIsSubmitting(true);
     try {
       const res = await nftAPI.acceptBid(id, bidId);
-      alert(`Bid accepted! You received ${getCurrencySymbol('agon')} ${formatCurrency(res.data.sale.received)} Agon`);
+      success(`Bid accepted! You received ${getCurrencySymbol('agon')} ${formatCurrency(res.data.sale.received)} Agon 💰`);
       loadNFTDetails();
       loadWallet();
     } catch (error) {
       console.error('Accept bid error:', error);
-      alert(error.response?.data?.message || 'Failed to accept bid');
+      showError(error.response?.data?.message || 'Failed to accept bid');
     } finally {
       setIsSubmitting(false);
     }
@@ -161,19 +162,19 @@ const NFTDetail = () => {
     if (!confirm(`Buy this NFT for ${getCurrencySymbol('agon')} ${formatCurrency(nft.ask_price)} Agon?`)) return;
 
     if (wallet.agon < nft.ask_price) {
-      alert('Insufficient Agon balance');
+      showError('Insufficient Agon balance');
       return;
     }
 
     setIsSubmitting(true);
     try {
       await nftAPI.buyNFT(id);
-      alert('NFT purchased successfully!');
+      success('NFT purchased successfully! 🎉');
       loadNFTDetails();
       loadWallet();
     } catch (error) {
       console.error('Buy error:', error);
-      alert(error.response?.data?.message || 'Failed to buy NFT');
+      showError(error.response?.data?.message || 'Failed to buy NFT');
     } finally {
       setIsSubmitting(false);
     }
@@ -202,11 +203,21 @@ const NFTDetail = () => {
     );
   }
 
+  const breadcrumbItems = [
+    { label: 'NFT Market', href: '/nft-market' },
+    { label: nft.category.replace('_', ' '), href: `/nft-market?category=${nft.category}` },
+    { label: nft.name }
+  ];
+
   return (
     <div className="min-h-screen bg-phantom-bg-primary">
+      <NFTMetaTags nft={nft} />
       <Navbar />
       
       <div className="container mx-auto px-4 py-8 max-w-7xl">
+        {/* Breadcrumb */}
+        <Breadcrumb items={breadcrumbItems} />
+
         {/* Back Button */}
         <button
           onClick={() => navigate(-1)}
@@ -221,7 +232,10 @@ const NFTDetail = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Left: Image */}
           <div>
-            <div className="bg-phantom-bg-secondary border-2 border-phantom-border rounded-2xl overflow-hidden">
+            <div 
+              className="bg-phantom-bg-secondary border-2 border-phantom-border rounded-2xl overflow-hidden cursor-pointer hover:border-phantom-accent-primary transition-colors group relative"
+              onClick={() => setShowLightbox(true)}
+            >
               <img
                 src={nft.image_url}
                 alt={nft.name}
@@ -230,6 +244,14 @@ const NFTDetail = () => {
                   e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAwIiBoZWlnaHQ9IjYwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNjAwIiBoZWlnaHQ9IjYwMCIgZmlsbD0iIzJhMmEzYSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMjQiIGZpbGw9IiM2NjY2NzgiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5JbWFnZSBub3QgZm91bmQ8L3RleHQ+PC9zdmc+';
                 }}
               />
+              {/* Zoom overlay */}
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all flex items-center justify-center">
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/10 backdrop-blur-sm rounded-full p-3">
+                  <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
+                  </svg>
+                </div>
+              </div>
             </div>
 
             {/* Description */}
@@ -272,8 +294,11 @@ const NFTDetail = () => {
             {/* NFT Info */}
             <div className="bg-phantom-bg-secondary border-2 border-phantom-border rounded-2xl p-6 mb-6">
               <div className="flex items-start justify-between mb-4">
-                <div>
-                  <h1 className="text-3xl font-bold text-phantom-text-primary mb-2">{nft.name}</h1>
+                <div className="flex-1">
+                  <div className="flex items-start gap-3 mb-2">
+                    <h1 className="text-3xl font-bold text-phantom-text-primary flex-1">{nft.name}</h1>
+                    <ShareNFT nftId={nft.id} nftName={nft.name} />
+                  </div>
                   <div className="flex items-center gap-4 text-sm text-phantom-text-secondary">
                     <Link to={`/user/${nft.creator_id}`} className="hover:text-phantom-accent-primary">
                       By {nft.creator_username}
@@ -289,7 +314,7 @@ const NFTDetail = () => {
                   </div>
                 </div>
                 {nft.edition_total > 1 && (
-                  <div className="px-3 py-1 bg-phantom-accent-primary/20 text-phantom-accent-primary rounded-lg">
+                  <div className="px-3 py-1 bg-phantom-accent-primary/20 text-phantom-accent-primary rounded-lg ml-3">
                     {nft.edition_number}/{nft.edition_total}
                   </div>
                 )}
@@ -488,6 +513,15 @@ const NFTDetail = () => {
           </div>
         </div>
       </div>
+
+      {/* Image Lightbox */}
+      {showLightbox && (
+        <ImageLightbox
+          imageUrl={nft.image_url}
+          alt={nft.name}
+          onClose={() => setShowLightbox(false)}
+        />
+      )}
     </div>
   );
 };

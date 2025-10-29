@@ -1,4 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { HelmetProvider } from 'react-helmet-async';
 import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './components/Toast';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -25,10 +26,11 @@ import MyNFTs from './pages/MyNFTs';
 
 function App() {
   return (
-    <Router>
-      <ToastProvider>
-        <AuthProvider>
-          <Routes>
+    <HelmetProvider>
+      <Router>
+        <ToastProvider>
+          <AuthProvider>
+            <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/admin/login" element={<AdminLogin />} />
@@ -189,10 +191,11 @@ function App() {
             }
           />
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          </Routes>
-        </AuthProvider>
-      </ToastProvider>
-    </Router>
+            </Routes>
+          </AuthProvider>
+        </ToastProvider>
+      </Router>
+    </HelmetProvider>
   );
 }
 
