@@ -2,28 +2,36 @@
 -- Created: 2024-10-29
 -- Description: Creates tables for NFT minting, trading, bidding, and transaction tracking
 
--- Create NFT categories enum
-CREATE TYPE nft_category AS ENUM (
-  'nation_flags',
-  'notable_builds', 
-  'memes_moments',
-  'player_avatars',
-  'event_commemorations',
-  'achievement_badges',
-  'map_art',
-  'historical_documents',
-  'other'
-);
+-- Create NFT categories enum (if not exists)
+DO $$ BEGIN
+  CREATE TYPE nft_category AS ENUM (
+    'nation_flags',
+    'notable_builds', 
+    'memes_moments',
+    'player_avatars',
+    'event_commemorations',
+    'achievement_badges',
+    'map_art',
+    'historical_documents',
+    'other'
+  );
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
 
--- Create NFT transaction type enum
-CREATE TYPE nft_transaction_type AS ENUM (
-  'mint',
-  'sale',
-  'bid_accepted',
-  'transfer',
-  'list',
-  'unlist'
-);
+-- Create NFT transaction type enum (if not exists)
+DO $$ BEGIN
+  CREATE TYPE nft_transaction_type AS ENUM (
+    'mint',
+    'sale',
+    'bid_accepted',
+    'transfer',
+    'list',
+    'unlist'
+  );
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
 
 -- Create nfts table
 CREATE TABLE IF NOT EXISTS nfts (
