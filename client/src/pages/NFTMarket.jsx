@@ -3,12 +3,16 @@ import { Link, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { nftAPI } from '../services/api';
 import { formatCurrency, getCurrencySymbol } from '../utils/formatters';
+import NFTCardSkeleton from '../components/NFTCardSkeleton';
+import MarketStats from '../components/MarketStats';
+import QuickFilters from '../components/QuickFilters';
 
 const NFTMarket = () => {
   const navigate = useNavigate();
   const [nfts, setNfts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeQuickFilter, setActiveQuickFilter] = useState('new');
   const [pagination, setPagination] = useState({
     total: 0,
     limit: 24,
@@ -77,6 +81,11 @@ const NFTMarket = () => {
     setPagination(prev => ({ ...prev, offset: 0 })); // Reset to first page
   };
 
+  const handleQuickFilterChange = (newFilters) => {
+    setFilters(prev => ({ ...prev, ...newFilters }));
+    setPagination(prev => ({ ...prev, offset: 0 }));
+  };
+
   const handleSearch = (e) => {
     e.preventDefault();
     loadNFTs();
@@ -111,6 +120,15 @@ const NFTMarket = () => {
             + Mint NFT
           </Link>
         </div>
+
+        {/* Market Stats */}
+        {!isLoading && nfts.length > 0 && <MarketStats nfts={nfts} />}
+
+        {/* Quick Filters */}
+        <QuickFilters 
+          onFilterChange={handleQuickFilterChange}
+          activeFilter={activeQuickFilter}
+        />
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Filters Sidebar */}
@@ -244,9 +262,10 @@ const NFTMarket = () => {
             </div>
 
             {isLoading && pagination.offset === 0 ? (
-              <div className="text-center py-12">
-                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-phantom-accent-primary"></div>
-                <p className="mt-4 text-phantom-text-secondary">Loading NFTs...</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                {[...Array(6)].map((_, i) => (
+                  <NFTCardSkeleton key={i} />
+                ))}
               </div>
             ) : nfts.length === 0 ? (
               <div className="text-center py-12">

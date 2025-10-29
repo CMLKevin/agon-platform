@@ -3,6 +3,11 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { nftAPI, walletAPI, authAPI } from '../services/api';
 import { formatCurrency, getCurrencySymbol } from '../utils/formatters';
+import { useToast } from '../components/Toast';
+import { useRecentlyViewed } from '../hooks/useRecentlyViewed';
+import ImageLightbox from '../components/ImageLightbox';
+import ShareNFT from '../components/ShareNFT';
+import Breadcrumb from '../components/Breadcrumb';
 
 const NFTDetail = () => {
   const { id } = useParams();
@@ -13,11 +18,16 @@ const NFTDetail = () => {
   const [wallet, setWallet] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [showLightbox, setShowLightbox] = useState(false);
   
   // Action states
   const [bidAmount, setBidAmount] = useState('');
   const [askPrice, setAskPrice] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Hooks
+  const { success, error: showError } = useToast();
+  const { addToRecentlyViewed } = useRecentlyViewed();
 
   useEffect(() => {
     loadNFTDetails();
@@ -35,9 +45,11 @@ const NFTDetail = () => {
       if (res.data.nft.ask_price) {
         setAskPrice(res.data.nft.ask_price);
       }
+      // Add to recently viewed
+      addToRecentlyViewed(res.data.nft);
     } catch (error) {
       console.error('Failed to load NFT:', error);
-      alert('NFT not found');
+      showError('NFT not found');
       navigate('/nft-market');
     } finally {
       setIsLoading(false);
